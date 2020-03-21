@@ -7,6 +7,10 @@ TODO:
    http://www.edfplus.info/downloads/software/NeuroLoopGain.zip.
  - check annotations with Schalk's Physiobank data.
 Copyright (c) 2012 Boris Reuderink.
+
+Modified for our use case
+
+Author: Ayush Baid
 '''
 
 import re
