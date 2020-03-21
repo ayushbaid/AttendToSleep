@@ -542,4 +542,8 @@ MigrationBackup/
 
 # Datasets and model files
 /dataset/
+!/dataset/**/README.md
 /models/
+
+# VSCode file
+/code/.vscode/*
