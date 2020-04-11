@@ -10,10 +10,10 @@ import torch.nn as nn
 
 
 class CNNSeq2SeqModel(nn.Module):
-    def __init__(self, num_hidden=128, num_rnn_layers=2, num_temporal=10):
+    def __init__(self, num_temporal, cnn_weights=None):
         super(CNNSeq2SeqModel, self).__init__()
 
-        self.num_temporal = 10
+        self.num_temporal = num_temporal
         self.num_labels = 5
 
         self.cnn_left = nn.Sequential(
@@ -51,6 +51,14 @@ class CNNSeq2SeqModel(nn.Module):
             nn.MaxPool1d(kernel_size=2, stride=2),
             nn.Dropout(),  # moving dropout to the front
         )
+
+        if cnn_weights is not None:
+            print('[Log] Loading CNN model weights from pretraining')
+
+            self.cnn_left.load_state_dict(cnn_weights['model_cnnLeft'])
+            self.cnn_right.load_state_dict(cnn_weights['model_cnnRight'])
+
+            self.freeze_cnn()
 
         self.transformer = TransformerModel(
             ntoken=self.num_labels, ninp=2176, nhead=1, nhid=128, nlayers=1, dropout=0.2
@@ -93,6 +101,58 @@ class CNNSeq2SeqModel(nn.Module):
 
         # flip the axis convention to the input convention
         return torch.transpose(output, 1, 0)
+
+    def freeze_cnn(self):
+        self.cnn_left[0].weight.requires_grad = False
+        self.cnn_left[0].bias.requires_grad = False
+
+        self.cnn_left[4].weight.requires_grad = False
+        self.cnn_left[4].bias.requires_grad = False
+
+        self.cnn_left[6].weight.requires_grad = False
+        self.cnn_left[6].bias.requires_grad = False
+
+        self.cnn_left[8].weight.requires_grad = False
+        self.cnn_left[8].bias.requires_grad = False
+
+        # take care to turn off gradients for both weight and bias
+        self.cnn_right[0].weight.requires_grad = False
+        self.cnn_right[0].bias.requires_grad = False
+
+        self.cnn_right[4].weight.requires_grad = False
+        self.cnn_right[4].bias.requires_grad = False
+
+        self.cnn_right[6].weight.requires_grad = False
+        self.cnn_right[6].bias.requires_grad = False
+
+        self.cnn_right[8].weight.requires_grad = False
+        self.cnn_right[8].bias.requires_grad = False
+
+    def unfreeze_cnn(self):
+        self.cnn_left[0].weight.requires_grad = True
+        self.cnn_left[0].bias.requires_grad = True
+
+        self.cnn_left[4].weight.requires_grad = True
+        self.cnn_left[4].bias.requires_grad = True
+
+        self.cnn_left[6].weight.requires_grad = True
+        self.cnn_left[6].bias.requires_grad = True
+
+        self.cnn_left[8].weight.requires_grad = True
+        self.cnn_left[8].bias.requires_grad = True
+
+        # take care to turn off gradients for both weight and bias
+        self.cnn_right[0].weight.requires_grad = True
+        self.cnn_right[0].bias.requires_grad = True
+
+        self.cnn_right[4].weight.requires_grad = True
+        self.cnn_right[4].bias.requires_grad = True
+
+        self.cnn_right[6].weight.requires_grad = True
+        self.cnn_right[6].bias.requires_grad = True
+
+        self.cnn_right[8].weight.requires_grad = True
+        self.cnn_right[8].bias.requires_grad = True
 
 
 class TransformerModel(nn.Module):
@@ -155,4 +215,3 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
-
