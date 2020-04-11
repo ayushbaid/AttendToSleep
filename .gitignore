@@ -547,3 +547,6 @@ MigrationBackup/
 
 # VSCode file
 /code/.vscode/*
+
+# SleepEEGNEt code
+code/SleepEEGNet-master/*
