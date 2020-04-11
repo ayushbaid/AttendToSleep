@@ -16,6 +16,15 @@ We are using the expanded Sleep-EDF database from https://physionet.org/content/
 - Temp rectal
 - Event marker
 
+### ETL Pipeline
+1. Separating training vs. testing dataset (randomly/think of the best way to sample while avoiding subsampling on the same sequence). 
+2. Compute spectogram in the pipeline.
+
+### Deep Learning Pipeline
+1. CNN
+2. Attention on RNN
+3. GAN?
+
 ## Existing Work
 
 1. Automatic Sleep Stage Scoring Using Time-Frequency Analysis and Stacked Sparse Autoencoders, 2015. [Paper](https://www.ncbi.nlm.nih.gov/pubmed/26464268) 
