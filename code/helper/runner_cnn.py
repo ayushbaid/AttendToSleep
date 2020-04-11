@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import torch
 
@@ -127,8 +129,16 @@ class RunnerCNN():
 
             scheduler.step()
 
+    def save_model(self):
+        torch.save({
+            'model_cnnLeft': self.model.cnn_left.state_dict(),
+            'model_cnnRight': self.model.cnn_right.state_dict(),
+        }, os.path.join('../models/', 'cnn_checkpoint.pt'))
+
 
 if __name__ == '__main__':
     runner = RunnerCNN()
 
     runner.train()
+
+    runner.save_model()
