@@ -28,7 +28,8 @@ class ProcessedDataset(Dataset):
 
             num_elems = (data_len//temporal_len)*temporal_len
 
-            self.x_list.append(np.transpose(temp['x'], [0, 2, 1])[:num_elems])
+            self.x_list.append(np.transpose(
+                self.normalize_data(temp['x']), [0, 2, 1])[:num_elems])
             self.y_list.append(temp['y'][:num_elems])
 
         if mode == 'train':
@@ -47,12 +48,23 @@ class ProcessedDataset(Dataset):
     def __getitem__(self, idx):
         return (torch.FloatTensor(self.x_list[idx]), torch.LongTensor(self.y_list[idx]))
 
+    def normalize_data(self, data):
+        '''
+        Normalize to zero mean and unit variance
+
+        dim=2 is normalized
+        '''
+        data = data - np.mean(data, axis=1, keepdims=True)
+        data = data/(np.linalg.norm(data, axis=1, keepdims=True)+1e-2)
+
+        return data
+
 
 if __name__ == '__main__':
     # obj = ProcessedDataset(
     #     '../dataset/small/physionet_processed/', temporal_len=10, mode='train')
 
-    # for idx in range(obj.__len__()):
+    # for idx in range(5):
     #     x, y = obj.__getitem__(idx)
 
     #     print(x.shape)
