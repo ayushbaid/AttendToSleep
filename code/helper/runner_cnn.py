@@ -1,5 +1,6 @@
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -18,19 +19,19 @@ class RunnerCNN():
         self.temporal_len = 1
 
         self.train_loader = torch.utils.data.DataLoader(
-            ProcessedDataset(base_dir='../dataset/small/physionet_processed/train',
+            ProcessedDataset(base_dir='../dataset/all/processed/train',
                              temporal_len=self.temporal_len,
                              mode='train'),
-            batch_size=4,
+            batch_size=64,
             shuffle=True,
             pin_memory=self.cuda
         )
 
         self.test_loader = torch.utils.data.DataLoader(
-            ProcessedDataset(base_dir='../dataset/small/physionet_processed/test',
+            ProcessedDataset(base_dir='../dataset/all/processed/test',
                              temporal_len=self.temporal_len,
                              mode='train'),
-            batch_size=4,
+            batch_size=64,
             shuffle=True,
             pin_memory=self.cuda
         )
@@ -42,6 +43,11 @@ class RunnerCNN():
         self.batch_log_interval = 500
 
         self.criterion = torch.nn.CrossEntropyLoss()
+
+        self.train_loss_history = []
+        self.val_loss_history = []
+        self.train_acc_history = []
+        self.val_acc_history = []
 
     def eval_model(self):
         self.model.eval()
@@ -84,6 +90,11 @@ class RunnerCNN():
         print('[Start] val_loss:{:5.2f} \t  \t val_accuracy:{:1.2f}'.format(
             validation_loss, validation_accuracy))
 
+        self.train_loss_history = []
+        self.val_loss_history = [validation_loss]
+        self.train_acc_history = []
+        self.val_acc_history = [validation_accuracy]
+
         self.model.train()  # Turn on the train mode
         for epoch_idx in range(self.num_train_epochs):
             total_loss = 0
@@ -107,6 +118,13 @@ class RunnerCNN():
                     prediction == y
                 ).detach().cpu().numpy().astype(int)
 
+                # save the 0th batch of 0th epoch
+                if epoch_idx == 0 and batch_idx == 0:
+                    self.train_loss_history.append(loss.item())
+                    self.train_acc_history.append(np.sum(
+                        is_correct_prediction, axis=None)/is_correct_prediction.shape[0]
+                    )
+
                 total_correct_predictions += np.sum(
                     is_correct_prediction, axis=None)
                 total_predictions += is_correct_prediction.shape[0]
@@ -127,6 +145,13 @@ class RunnerCNN():
             print('[Epoch End] Epoch: {:d} \t train_loss:{:5.2f} \t val_loss:{:5.2f} \t train_accuracy:{:1.2f} \t val_accuracy:{:1.2f}'.format(
                 epoch_idx, train_loss, validation_loss, train_accuracy, validation_accuracy))
 
+            self.train_loss_history.append(train_loss)
+            self.val_loss_history.append(validation_loss)
+            self.train_acc_history.append(train_accuracy)
+            self.val_acc_history.append(validation_accuracy)
+
+            self.save_loss_curves()
+
             scheduler.step()
 
     def save_model(self):
@@ -135,6 +160,29 @@ class RunnerCNN():
             'model_cnnRight': self.model.cnn_right.state_dict(),
         }, os.path.join('../models/', 'cnn_checkpoint.pt'))
 
+    def save_loss_curves(self):
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+
+        ax1.plot(self.train_loss_history, label='train')
+        ax1.plot(self.val_loss_history, label='val')
+
+        ax1.set_title('Loss curve')
+        ax1.set_xlabel('epoch')
+        ax1.set_ylabel('loss')
+        ax1.legend()
+
+        ax2.plot(self.train_acc_history, label='train')
+        ax2.plot(self.val_acc_history, label='val')
+
+        ax2.set_title('Accuracy curve')
+        ax2.set_xlabel('epoch')
+        ax2.set_ylabel('accuracy')
+        ax2.legend()
+
+        fig.tight_layout()
+
+        plt.savefig('../plots/cnn_learning_curves.png')
+
 
 if __name__ == '__main__':
     runner = RunnerCNN()
@@ -142,3 +190,5 @@ if __name__ == '__main__':
     runner.train()
 
     runner.save_model()
+
+    runner.save_loss_curves()

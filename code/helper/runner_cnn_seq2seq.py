@@ -1,3 +1,6 @@
+import os
+
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -14,6 +17,14 @@ class RunnerCNNSeq2Seq():
 
         self.cuda = torch.cuda.is_available()
         self.device = torch.device("cuda" if self.cuda else "cpu")
+
+        self.load_cnn_from_disk = True
+
+        if self.load_cnn_from_disk and os.path.exists(os.path.join('..', 'models', 'cnn_checkpoint.pt')):
+            cnn_weights = torch.load(os.path.join(
+                '..', 'models', 'cnn_checkpoint.pt'))
+        else:
+            cnn_weights = None
 
         self.train_loader = torch.utils.data.DataLoader(
             ProcessedDataset(base_dir='../dataset/all/processed/train',
@@ -34,13 +45,19 @@ class RunnerCNNSeq2Seq():
         )
 
         self.model = CNNSeq2SeqModel(
-            num_temporal=self.temporal_len).to(self.device)
+            num_temporal=self.temporal_len, cnn_weights=cnn_weights
+        ).to(self.device)
 
         self.num_train_epochs = 20
 
         self.batch_log_interval = 500
 
         self.criterion = torch.nn.CrossEntropyLoss()
+
+        self.train_loss_history = []
+        self.val_loss_history = []
+        self.train_acc_history = []
+        self.val_acc_history = []
 
     def eval_model(self):
         self.model.eval()
@@ -80,10 +97,20 @@ class RunnerCNNSeq2Seq():
 
         validation_loss, validation_accuracy = self.eval_model()
 
-        print('[Start] val_loss:{:5.2f} \t  \t val_accuracy:{:1.2f}'.format(validation_loss, validation_accuracy))
+        print('[Start] val_loss:{:5.2f} \t  \t val_accuracy:{:1.2f}'.format(
+            validation_loss, validation_accuracy))
+
+        self.train_loss_history = []
+        self.val_loss_history = [validation_loss]
+        self.train_acc_history = []
+        self.val_acc_history = [validation_accuracy]
 
         self.model.train()  # Turn on the train mode
         for epoch_idx in range(self.num_train_epochs):
+            # unfreeze the CNN layers after 5 epochs
+            if epoch_idx == 5:
+                self.model.unfreeze_cnn()
+
             total_loss = 0
             total_correct_predictions = 0
             total_predictions = 0
@@ -104,6 +131,13 @@ class RunnerCNNSeq2Seq():
                 is_correct_prediction = torch.flatten(
                     prediction == y
                 ).detach().cpu().numpy().astype(int)
+
+                # save the 0th batch of 0th epoch
+                if epoch_idx == 0 and batch_idx == 0:
+                    self.train_loss_history.append(loss.item())
+                    self.train_acc_history.append(np.sum(
+                        is_correct_prediction, axis=None)/is_correct_prediction.shape[0]
+                    )
 
                 total_correct_predictions += np.sum(
                     is_correct_prediction, axis=None)
@@ -127,10 +161,51 @@ class RunnerCNNSeq2Seq():
             print('[Epoch End] Epoch: {:d} \t train_loss:{:5.2f} \t val_loss:{:5.2f} \t train_accuracy:{:1.2f} \t val_accuracy:{:1.2f}'.format(
                 epoch_idx, train_loss, validation_loss, train_accuracy, validation_accuracy))
 
+            self.train_loss_history.append(train_loss)
+            self.val_loss_history.append(validation_loss)
+            self.train_acc_history.append(train_accuracy)
+            self.val_acc_history.append(validation_accuracy)
+
+            self.save_loss_curves()
+
             scheduler.step()
+
+    def save_model(self):
+        torch.save({
+            'model_cnnLeft': self.model.cnn_left.state_dict(),
+            'model_cnnRight': self.model.cnn_right.state_dict(),
+            'model_transformers': self.model.transformer.state_dict()
+        }, os.path.join('../models/', 'cnnSeq2Seq_checkpoint.pt'))
+
+    def save_loss_curves(self):
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+
+        ax1.plot(self.train_loss_history, label='train')
+        ax1.plot(self.val_loss_history, label='val')
+
+        ax1.set_title('Loss curve')
+        ax1.set_xlabel('epoch')
+        ax1.set_ylabel('loss')
+        ax1.legend()
+
+        ax2.plot(self.train_acc_history, label='train')
+        ax2.plot(self.val_acc_history, label='val')
+
+        ax2.set_title('Accuracy curve')
+        ax2.set_xlabel('epoch')
+        ax2.set_ylabel('accuracy')
+        ax2.legend()
+
+        fig.tight_layout()
+
+        plt.savefig('../plots/cnnSeq2Seq_learning_curves.png')
 
 
 if __name__ == '__main__':
     runner = RunnerCNNSeq2Seq()
 
     runner.train()
+
+    runner.save_model()
+
+    runner.save_loss_curves()
