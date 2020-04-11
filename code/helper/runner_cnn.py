@@ -183,6 +183,8 @@ class RunnerCNN():
 
         plt.savefig('../plots/cnn_learning_curves.png')
 
+        plt.close()
+
 
 if __name__ == '__main__':
     runner = RunnerCNN()

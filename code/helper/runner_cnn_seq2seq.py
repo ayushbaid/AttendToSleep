@@ -200,6 +200,8 @@ class RunnerCNNSeq2Seq():
 
         plt.savefig('../plots/cnnSeq2Seq_learning_curves.png')
 
+        plt.close()
+
 
 if __name__ == '__main__':
     runner = RunnerCNNSeq2Seq()
