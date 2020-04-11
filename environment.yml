@@ -1,15 +1,14 @@
 name: sleep
 channels:
+  - pytorch
   - conda-forge
   - defaults
-  - pytorch
 dependencies:
   - python
   - mne
+  - cudatoolkit
   - pytorch
-  - cudatoolkit=10.1
   - pandas
   - pylint
   - autopep8
-  
 
