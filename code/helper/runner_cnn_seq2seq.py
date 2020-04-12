@@ -15,7 +15,7 @@ class RunnerCNNSeq2Seq():
     def __init__(self):
         super(RunnerCNNSeq2Seq, self).__init__()
 
-        self.temporal_len = 20
+        self.temporal_len = 10
 
         self.cuda = torch.cuda.is_available()
         self.device = torch.device("cuda" if self.cuda else "cpu")
@@ -56,10 +56,10 @@ class RunnerCNNSeq2Seq():
         )
 
         self.model = CNNSeq2SeqModel(
-            num_temporal=self.temporal_len, cnn_weights=cnn_weights
+            cnn_weights=cnn_weights
         ).to(self.device)
 
-        self.num_train_epochs = 10
+        self.num_train_epochs = 20
 
         self.batch_log_interval = 250
 
@@ -126,17 +126,30 @@ class RunnerCNNSeq2Seq():
 
         for batch in self.test_loader:
             X = batch[0].to(self.device)
-            y = torch.flatten(batch[1].to(self.device))
+            y = batch[1]
 
-            model_output = self.model(X).reshape(-1, 5)
+            curr_prediction = []
+            curr_target = []
+            for start_idx in range(0, X.shape[1], self.temporal_len):
+                X_split = X[:, start_idx:start_idx+self.temporal_len, :]
+                y_split = torch.flatten(
+                    y[:, start_idx:start_idx+self.temporal_len])
 
-            # compute the accuracy
-            prediction_list.append(torch.flatten(torch.argmax(
-                model_output, dim=1
-            )).detach().cpu().numpy().astype(int))
-            target_list.append(
-                y.detach().cpu().numpy().astype(int)
-            )
+                model_output = self.model(X_split).reshape(-1, 5)
+
+                # compute the accuracy
+                curr_prediction.append(torch.flatten(torch.argmax(
+                    model_output, dim=1
+                )).detach().cpu().numpy().astype(int))
+                curr_target.append(
+                    y_split.detach().cpu().numpy().astype(int)
+                )
+
+            curr_prediction = np.concatenate(curr_prediction)
+            curr_target = np.concatenate(curr_target)
+
+            prediction_list.append(curr_prediction)
+            target_list.append(curr_target)
 
         self.model.train()
 
