@@ -15,7 +15,7 @@ class RunnerCNNSeq2Seq():
     def __init__(self):
         super(RunnerCNNSeq2Seq, self).__init__()
 
-        self.temporal_len = 64
+        self.temporal_len = 20
 
         self.cuda = torch.cuda.is_available()
         self.device = torch.device("cuda" if self.cuda else "cpu")
@@ -32,7 +32,7 @@ class RunnerCNNSeq2Seq():
             ProcessedDataset(base_dir='../dataset/all/processed/train',
                              temporal_len=self.temporal_len,
                              mode='train'),
-            batch_size=5,
+            batch_size=50,
             shuffle=True,
             pin_memory=self.cuda
         )
@@ -41,7 +41,7 @@ class RunnerCNNSeq2Seq():
             ProcessedDataset(base_dir='../dataset/all/processed/val',
                              temporal_len=self.temporal_len,
                              mode='train'),
-            batch_size=5,
+            batch_size=50,
             shuffle=True,
             pin_memory=self.cuda
         )
@@ -59,7 +59,7 @@ class RunnerCNNSeq2Seq():
             num_temporal=self.temporal_len, cnn_weights=cnn_weights
         ).to(self.device)
 
-        self.num_train_epochs = 15
+        self.num_train_epochs = 10
 
         self.batch_log_interval = 250
 
@@ -95,6 +95,7 @@ class RunnerCNNSeq2Seq():
             y = torch.flatten(batch[1].to(self.device))
 
             model_output = self.model(X).reshape(-1, 5)
+
             loss = self.criterion(
                 model_output, y)
 
@@ -157,7 +158,7 @@ class RunnerCNNSeq2Seq():
 
     def train(self):
 
-        transformer_lr = 0.1  # learning rate
+        transformer_lr = 0.3  # learning rate
         transformer_optimizer = torch.optim.SGD(
             self.model.transformer.parameters(), lr=transformer_lr)
         transformer_scheduler = torch.optim.lr_scheduler.StepLR(

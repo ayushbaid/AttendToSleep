@@ -13,7 +13,6 @@ class CNNSeq2SeqModel(nn.Module):
     def __init__(self, num_temporal, cnn_weights=None):
         super(CNNSeq2SeqModel, self).__init__()
 
-        self.num_temporal = num_temporal
         self.num_labels = 5
 
         self.cnn_left = nn.Sequential(
@@ -62,14 +61,14 @@ class CNNSeq2SeqModel(nn.Module):
 
         self.fc_layers = nn.Sequential(
             nn.ReLU(),
-            nn.Linear(2176, 512),
+            nn.Linear(2176, 1024),
             nn.ReLU(),
             nn.Dropout(),
-            nn.Linear(512, 256),
+            nn.Linear(1024, self.num_labels)
         )
 
         self.transformer = TransformerModel(
-            ntoken=self.num_labels, ninp=256, nhead=4, nhid=256, nlayers=3, dropout=0.05
+            ntoken=self.num_labels, ninp=2176, nhead=2, nhid=256, nlayers=2, dropout=0.05
         )
 
     def forward(self, x):
@@ -94,10 +93,11 @@ class CNNSeq2SeqModel(nn.Module):
             (cnn1.view(cnn_input.shape[0], -1), cnn2.view(cnn_input.shape[0], -1)), axis=1)
 
         # pass through the fc layers
-        cnn_output = self.fc_layers(cnn_output)
+        cnn_prediction = self.fc_layers(cnn_output)
 
         # reshape it according to x
         cnn_output = cnn_output.view(x.shape[0], x.shape[1], -1)
+        cnn_prediction = cnn_prediction.view(x.shape[0], x.shape[1], -1)
 
         # switch batch axis to second
         cnn_output = torch.transpose(cnn_output, 1, 0)
@@ -107,11 +107,11 @@ class CNNSeq2SeqModel(nn.Module):
 
         # pass the data through the transformer
         # print('Transformer input shape: ', cnn_output.shape)
-        output = self.transformer(cnn_output)
+        transformer_output = self.transformer(cnn_output)
         # print('Transformer output shape: ', output.shape)
 
-        # flip the axis convention to the input convention
-        return torch.transpose(output, 1, 0)
+        return cnn_prediction + \
+            torch.transpose(transformer_output, 1, 0)
 
     def freeze_cnn(self):
         self.cnn_left[0].weight.requires_grad = False
@@ -203,8 +203,8 @@ class TransformerModel(nn.Module):
         # src = self.encoder(src) * math.sqrt(self.ninp)
         src = src * math.sqrt(self.ninp)
         src = self.pos_encoder(src)
-        # output = self.transformer_encoder(src, self.src_mask) # with mask
-        output = self.transformer_encoder(src)  # no mask
+        output = self.transformer_encoder(src, self.src_mask)  # with mask
+        # output = self.transformer_encoder(src)  # no mask
         output = self.decoder(output)
         return output
 
