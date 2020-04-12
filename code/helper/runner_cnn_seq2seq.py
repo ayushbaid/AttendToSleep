@@ -3,7 +3,9 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import sklearn.metrics as metrics
 
+from itertools import chain
 
 from data.processed_dataset import ProcessedDataset
 from models.cnn_seq2seq import CNNSeq2SeqModel
@@ -13,7 +15,7 @@ class RunnerCNNSeq2Seq():
     def __init__(self):
         super(RunnerCNNSeq2Seq, self).__init__()
 
-        self.temporal_len = 10
+        self.temporal_len = 64
 
         self.cuda = torch.cuda.is_available()
         self.device = torch.device("cuda" if self.cuda else "cpu")
@@ -30,7 +32,16 @@ class RunnerCNNSeq2Seq():
             ProcessedDataset(base_dir='../dataset/all/processed/train',
                              temporal_len=self.temporal_len,
                              mode='train'),
-            batch_size=4,
+            batch_size=5,
+            shuffle=True,
+            pin_memory=self.cuda
+        )
+
+        self.val_loader = torch.utils.data.DataLoader(
+            ProcessedDataset(base_dir='../dataset/all/processed/val',
+                             temporal_len=self.temporal_len,
+                             mode='train'),
+            batch_size=5,
             shuffle=True,
             pin_memory=self.cuda
         )
@@ -38,8 +49,8 @@ class RunnerCNNSeq2Seq():
         self.test_loader = torch.utils.data.DataLoader(
             ProcessedDataset(base_dir='../dataset/all/processed/test',
                              temporal_len=self.temporal_len,
-                             mode='train'),
-            batch_size=4,
+                             mode='test'),
+            batch_size=1,
             shuffle=True,
             pin_memory=self.cuda
         )
@@ -48,24 +59,38 @@ class RunnerCNNSeq2Seq():
             num_temporal=self.temporal_len, cnn_weights=cnn_weights
         ).to(self.device)
 
-        self.num_train_epochs = 20
+        self.num_train_epochs = 15
 
-        self.batch_log_interval = 500
-
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.batch_log_interval = 250
 
         self.train_loss_history = []
         self.val_loss_history = []
         self.train_acc_history = []
         self.val_acc_history = []
 
+        # class-weghting for loss
+        class_entries = np.array(
+            [12241.0, 3786.0, 13320.0, 3658.0, 4609.0],
+            dtype=np.float64
+        )
+
+        loss_weights = 1.0/class_entries
+        loss_weights = loss_weights/np.sum(loss_weights)
+
+        self.criterion = torch.nn.CrossEntropyLoss(
+            weight=torch.FloatTensor(loss_weights).to(self.device)
+        )
+
     def eval_model(self):
+        '''
+        Evaluate on the validation set
+        '''
         self.model.eval()
 
         total_loss = 0
         total_correct_predictions = 0
         total_predictions = 0
-        for batch_idx, batch in enumerate(self.test_loader):
+        for batch in self.val_loader:
             X = batch[0].to(self.device)
             y = torch.flatten(batch[1].to(self.device))
 
@@ -87,13 +112,64 @@ class RunnerCNNSeq2Seq():
             total_predictions += is_correct_prediction.shape[0]
 
         self.model.train()
-        return total_loss/self.test_loader.__len__(), float(total_correct_predictions)/total_predictions
+        return total_loss/self.val_loader.__len__(), float(total_correct_predictions)/total_predictions
+
+    def test_model(self):
+        '''
+        Evaluate on the test set
+        '''
+        self.model.eval()
+
+        target_list = []
+        prediction_list = []
+
+        for batch in self.test_loader:
+            X = batch[0].to(self.device)
+            y = torch.flatten(batch[1].to(self.device))
+
+            model_output = self.model(X).reshape(-1, 5)
+
+            # compute the accuracy
+            prediction_list.append(torch.flatten(torch.argmax(
+                model_output, dim=1
+            )).detach().cpu().numpy().astype(int))
+            target_list.append(
+                y.detach().cpu().numpy().astype(int)
+            )
+
+        self.model.train()
+
+        # make a single array
+        prediction_array = np.concatenate(prediction_list)
+        target_array = np.concatenate(target_list)
+
+        prediction_list = None
+        target_list = None
+
+        f1_score = metrics.f1_score(
+            target_array, prediction_array, average='macro')
+        accuracy = metrics.accuracy_score(target_array, prediction_array)
+
+        confusion_mat = metrics.confusion_matrix(
+            target_array, prediction_array)
+
+        return accuracy, f1_score, confusion_mat
 
     def train(self):
 
-        lr = 0.1  # learning rate
-        optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
+        transformer_lr = 0.1  # learning rate
+        transformer_optimizer = torch.optim.SGD(
+            self.model.transformer.parameters(), lr=transformer_lr)
+        transformer_scheduler = torch.optim.lr_scheduler.StepLR(
+            transformer_optimizer, 1.0, gamma=0.95)
+
+        cnn_lr = 1e-3
+        cnn_optimizer = torch.optim.Adam(
+            chain(self.model.cnn_left.parameters(),
+                  self.model.cnn_right.parameters(),
+                  self.model.fc_layers.parameters()),
+            lr=cnn_lr
+        )
 
         validation_loss, validation_accuracy = self.eval_model()
 
@@ -118,7 +194,8 @@ class RunnerCNNSeq2Seq():
                 X = batch[0].to(self.device)
                 y = torch.flatten(batch[1].to(self.device))
 
-                optimizer.zero_grad()
+                transformer_optimizer.zero_grad()
+                cnn_optimizer.zero_grad()
                 model_output = self.model(X).reshape(-1, 5)
                 loss = self.criterion(
                     model_output, y)
@@ -143,9 +220,11 @@ class RunnerCNNSeq2Seq():
                     is_correct_prediction, axis=None)
                 total_predictions += is_correct_prediction.shape[0]
 
-                # TODO: gradient clipping for LSTM
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
-                optimizer.step()
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.transformer.parameters(), 0.5
+                )
+                transformer_optimizer.step()
+                cnn_optimizer.step()
 
                 if batch_idx % self.batch_log_interval == 0:
                     print('[Batch] Epoch: {:d} Batch: {:d} \t train_loss:{:5.2f}'.format(
@@ -168,12 +247,13 @@ class RunnerCNNSeq2Seq():
 
             self.save_loss_curves()
 
-            scheduler.step()
+            transformer_scheduler.step()
 
     def save_model(self):
         torch.save({
             'model_cnnLeft': self.model.cnn_left.state_dict(),
             'model_cnnRight': self.model.cnn_right.state_dict(),
+            'model_fc': self.model.fc_layers.state_dict(),
             'model_transformers': self.model.transformer.state_dict()
         }, os.path.join('../models/', 'cnnSeq2Seq_checkpoint.pt'))
 
@@ -211,3 +291,12 @@ if __name__ == '__main__':
     runner.save_model()
 
     runner.save_loss_curves()
+
+    test_f1, test_accuracy, test_confusion = runner.test_model()
+
+    print('==== Test set evaluation ====')
+    print(
+        'Accuracy: {:0.2f} \t F1-score: {:0.2f}'.format(test_accuracy, test_f1)
+    )
+    print('Confusion Matrix: ')
+    print(test_confusion)

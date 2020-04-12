@@ -28,9 +28,14 @@ class ProcessedDataset(Dataset):
 
             num_elems = (data_len//temporal_len)*temporal_len
 
-            self.x_list.append(np.transpose(
-                self.normalize_data(temp['x']), [0, 2, 1])[:num_elems])
-            self.y_list.append(temp['y'][:num_elems])
+            if mode == 'train':
+                self.x_list.append(np.transpose(
+                    self.normalize_data(temp['x']), [0, 2, 1])[:num_elems])
+                self.y_list.append(temp['y'][:num_elems])
+            else:
+                self.x_list.append(np.transpose(
+                    self.normalize_data(temp['x']), [0, 2, 1]))
+                self.y_list.append(temp['y'])
 
         if mode == 'train':
             self.x_list = [np.split(x, x.shape[0]//temporal_len)
@@ -62,21 +67,25 @@ class ProcessedDataset(Dataset):
 
 if __name__ == '__main__':
     # obj = ProcessedDataset(
-    #     '../dataset/small/physionet_processed/', temporal_len=10, mode='train')
+    #     '../dataset/small/physionet_processed/test', temporal_len=10, mode='train')
 
-    # for idx in range(5):
-    #     x, y = obj.__getitem__(idx)
-
-    #     print(x.shape)
-    #     print(y.shape)
-
-    # obj = ProcessedDataset(
-    #     '../dataset/small/physionet_processed/', temporal_len=10, mode='test')
-
+    # max_val = -1
+    # min_val = 10
     # for idx in range(obj.__len__()):
     #     x, y = obj.__getitem__(idx)
 
-    #     print(x.shape)
-    #     print(y.shape)
+    #     max_val = max(torch.max(y).item(), max_val)
+    #     min_val = min(torch.min(y).item(), min_val)
+
+    # print(min_val, ' ', max_val)
+
+    obj = ProcessedDataset(
+        '../dataset/small/physionet_processed/train/', temporal_len=10, mode='test')
+
+    for idx in range(obj.__len__()):
+        x, y = obj.__getitem__(idx)
+
+        print(x.shape)
+        print(y.shape)
 
     pass

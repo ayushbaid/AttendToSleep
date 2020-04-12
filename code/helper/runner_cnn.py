@@ -3,6 +3,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import sklearn.metrics as metrics
 
 
 from data.processed_dataset import ProcessedDataset
@@ -22,7 +23,16 @@ class RunnerCNN():
             ProcessedDataset(base_dir='../dataset/all/processed/train',
                              temporal_len=self.temporal_len,
                              mode='train'),
-            batch_size=64,
+            batch_size=200,
+            shuffle=True,
+            pin_memory=self.cuda
+        )
+
+        self.val_loader = torch.utils.data.DataLoader(
+            ProcessedDataset(base_dir='../dataset/all/processed/val',
+                             temporal_len=self.temporal_len,
+                             mode='train'),
+            batch_size=200,
             shuffle=True,
             pin_memory=self.cuda
         )
@@ -30,8 +40,8 @@ class RunnerCNN():
         self.test_loader = torch.utils.data.DataLoader(
             ProcessedDataset(base_dir='../dataset/all/processed/test',
                              temporal_len=self.temporal_len,
-                             mode='train'),
-            batch_size=64,
+                             mode='test'),
+            batch_size=1,
             shuffle=True,
             pin_memory=self.cuda
         )
@@ -42,20 +52,34 @@ class RunnerCNN():
 
         self.batch_log_interval = 500
 
-        self.criterion = torch.nn.CrossEntropyLoss()
-
         self.train_loss_history = []
         self.val_loss_history = []
         self.train_acc_history = []
         self.val_acc_history = []
 
+        # class-weghting for loss
+        class_entries = np.array(
+            [12241.0, 3786.0, 13320.0, 3658.0, 4609.0],
+            dtype=np.float64
+        )
+
+        loss_weights = 1.0/class_entries
+        loss_weights = loss_weights/np.sum(loss_weights)
+
+        self.criterion = torch.nn.CrossEntropyLoss(
+            weight=torch.FloatTensor(loss_weights).to(self.device)
+        )
+
     def eval_model(self):
+        '''
+        Evaluate on the validation set
+        '''
         self.model.eval()
 
         total_loss = 0
         total_correct_predictions = 0
         total_predictions = 0
-        for batch_idx, batch in enumerate(self.test_loader):
+        for batch in self.val_loader:
             X = batch[0].to(self.device)
             y = torch.flatten(batch[1].to(self.device))
 
@@ -77,7 +101,48 @@ class RunnerCNN():
             total_predictions += is_correct_prediction.shape[0]
 
         self.model.train()
-        return total_loss/self.test_loader.__len__(), float(total_correct_predictions)/total_predictions
+        return total_loss/self.val_loader.__len__(), float(total_correct_predictions)/total_predictions
+
+    def test_model(self):
+        '''
+        Evaluate on the test set
+        '''
+        self.model.eval()
+
+        target_list = []
+        prediction_list = []
+
+        for batch in self.test_loader:
+            X = batch[0].to(self.device)
+            y = torch.flatten(batch[1].to(self.device))
+
+            model_output = self.model(X).reshape(-1, 5)
+
+            # compute the accuracy
+            prediction_list.append(torch.flatten(torch.argmax(
+                model_output, dim=1
+            )).detach().cpu().numpy().astype(int))
+            target_list.append(
+                y.detach().cpu().numpy().astype(int)
+            )
+
+        self.model.train()
+
+        # make a single array
+        prediction_array = np.concatenate(prediction_list)
+        target_array = np.concatenate(target_list)
+
+        prediction_list = None
+        target_list = None
+
+        f1_score = metrics.f1_score(
+            target_array, prediction_array, average='macro')
+        accuracy = metrics.accuracy_score(target_array, prediction_array)
+
+        confusion_mat = metrics.confusion_matrix(
+            target_array, prediction_array)
+
+        return accuracy, f1_score, confusion_mat
 
     def train(self):
 
@@ -194,3 +259,12 @@ if __name__ == '__main__':
     runner.save_model()
 
     runner.save_loss_curves()
+
+    test_f1, test_accuracy, test_confusion = runner.test_model()
+
+    print('==== Test set evaluation ====')
+    print(
+        'Accuracy: {:0.2f} \t F1-score: {:0.2f}'.format(test_accuracy, test_f1)
+    )
+    print('Confusion Matrix: ')
+    print(test_confusion)

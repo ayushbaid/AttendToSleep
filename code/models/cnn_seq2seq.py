@@ -60,8 +60,16 @@ class CNNSeq2SeqModel(nn.Module):
 
             self.freeze_cnn()
 
+        self.fc_layers = nn.Sequential(
+            nn.ReLU(),
+            nn.Linear(2176, 512),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(512, 256),
+        )
+
         self.transformer = TransformerModel(
-            ntoken=self.num_labels, ninp=2176, nhead=1, nhid=128, nlayers=1, dropout=0.2
+            ntoken=self.num_labels, ninp=256, nhead=4, nhid=256, nlayers=3, dropout=0.05
         )
 
     def forward(self, x):
@@ -84,6 +92,9 @@ class CNNSeq2SeqModel(nn.Module):
 
         cnn_output = torch.cat(
             (cnn1.view(cnn_input.shape[0], -1), cnn2.view(cnn_input.shape[0], -1)), axis=1)
+
+        # pass through the fc layers
+        cnn_output = self.fc_layers(cnn_output)
 
         # reshape it according to x
         cnn_output = cnn_output.view(x.shape[0], x.shape[1], -1)
@@ -165,7 +176,7 @@ class TransformerModel(nn.Module):
         encoder_layers = nn.TransformerEncoderLayer(ninp, nhead, nhid, dropout)
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layers, nlayers)
-        # self.encoder = nn.Embedding(ntoken, ninp)
+        # self.encoder = nn.Embedding(ntoken, ninp) # moved this to a linear layer after the cnn concat
         self.ninp = ninp
         self.decoder = nn.Linear(ninp, ntoken)
 
@@ -192,7 +203,8 @@ class TransformerModel(nn.Module):
         # src = self.encoder(src) * math.sqrt(self.ninp)
         src = src * math.sqrt(self.ninp)
         src = self.pos_encoder(src)
-        output = self.transformer_encoder(src, self.src_mask)
+        # output = self.transformer_encoder(src, self.src_mask) # with mask
+        output = self.transformer_encoder(src)  # no mask
         output = self.decoder(output)
         return output
 
