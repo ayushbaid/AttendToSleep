@@ -13,27 +13,31 @@ We use the EEG Fpz-Cz single channel data to classify the sleep
 - Use the environment.yml file to install the conda environment
 - Move to directory code by running ```cd code```
 - Install the repository by running ```pip install -e .```
+- Download the PSG and hypnogram files from PhysioNet by running ```??```
+- Extract signals from EEG Fpz-Cz, EEG Pz-Oz, and EOG horizontal by running ```python prepare_physionet.py --data_dir data```
+- Data processing by running ```python python data_processing.py --data_dir data```
 - train the cnn-only model by running ```python helper/runner_cnn.py```
 - train the final model by running ```python helper/runner_cnn_seq2seq.py```
-
-
 
 ## Datasets
 
 We are using the expanded Sleep-EDF database from https://physionet.org/content/sleep-edfx/1.0.0/
 
 ### Channels
-- EEG Fpz-Cz
-- EEG Pz-Oz
-- EOG horizontal
+- **EEG Fpz-Cz**
+- **EEG Pz-Oz**
+- **EOG horizontal**
 - Resp oro-nasal
 - EMG submental
 - Temp rectal
 - Event marker
 
 ### ETL Pipeline
-1. Separating training vs. testing dataset (randomly/think of the best way to sample while avoiding subsampling on the same sequence). 
-2. Compute spectogram in the pipeline.
+1. Extract different channel signals from downloaded PSG for each patient, and save as a CSV file. Extract corresponding labels from the hypnogram for the same patient.
+2. Load the label CSV and the signal CSV into Spark (PySpark). 
+3. Remove unknown labels, only keep stages W, N1, N2, N3, N4, and REM.
+4. Segment the signals into 30s epochs.
+5. Save the channel signals and corresponding label as NPZ file for models.
 
 ### Deep Learning Pipeline
 1. CNN
