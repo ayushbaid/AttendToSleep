@@ -11,4 +11,6 @@ dependencies:
   - pandas
   - pylint
   - autopep8
+  - torchaudio
+  - torchvision
 
