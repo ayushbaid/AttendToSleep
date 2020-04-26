@@ -1,5 +1,20 @@
 # AttendToSleep
-Sleep Stage Classification using Attention
+Sleep Stage Classification using CNN + Attention mechanism (Transformers)
+
+
+
+We use the EEG Fpz-Cz single channel data to classify the sleep
+
+
+
+## Setup
+
+- TODO: add data download instructions (put processed npy files in data/all/processed)
+- Use the environment.yml file to install the conda environment
+- Move to directory code by running ```cd code```
+- Install the repository by running ```pip install -e .```
+- train the cnn-only model by running ```python helper/runner_cnn.py```
+- train the final model by running ```python helper/runner_cnn_seq2seq.py```
 
 
 
