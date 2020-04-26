@@ -13,7 +13,7 @@ We use the EEG Fpz-Cz single channel data to classify the sleep
 - Use the environment.yml file to install the conda environment
 - Move to directory code by running ```cd code```
 - Install the repository by running ```pip install -e .```
-- Download the PSG and hypnogram files from PhysioNet by running ```??```
+- Download the PSG and hypnogram files from PhysioNet by running ```cd data```, ```chmod +x download_physionet.sh```,```./download_physionet.sh```
 - Extract signals from EEG Fpz-Cz, EEG Pz-Oz, and EOG horizontal by running ```python prepare_physionet.py --data_dir data```
 - Data processing by running ```python python data_processing.py --data_dir data```
 - train the cnn-only model by running ```python helper/runner_cnn.py```
