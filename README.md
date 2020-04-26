@@ -16,7 +16,7 @@ We use the EEG Fpz-Cz single channel data to classify the sleep
 - Download the PSG and hypnogram files from PhysioNet by running ```cd data```, ```chmod +x download_physionet.sh```,```./download_physionet.sh```
 - Extract signals from EEG Fpz-Cz, EEG Pz-Oz, and EOG horizontal by running ```python prepare_physionet.py --data_dir data```
 - Data processing by running ```python python data_processing.py --data_dir data```
-- Copy the processed numpy arrays into dataset/processed/all and split them into train, val, and test set.
+- Copy the processed numpy arrays into dataset/processed/all and split them into train, val, and test set. (```python test_train_split.py``` can be used to help the splitting.)
 - train the cnn-only model by running ```python helper/runner_cnn.py```
 - train the final model by running ```python helper/runner_cnn_seq2seq.py```
 
