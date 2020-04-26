@@ -33,11 +33,12 @@ We are using the expanded Sleep-EDF database from https://physionet.org/content/
 - Event marker
 
 ### ETL Pipeline
-1. Extract different channel signals from downloaded PSG for each patient, and save as a CSV file. Extract corresponding labels from the hypnogram for the same patient.
-2. Load the label CSV and the signal CSV into Spark (PySpark). 
-3. Remove unknown labels, only keep stages W, N1, N2, N3, N4, and REM.
-4. Segment the signals into 30s epochs.
-5. Save the channel signals and corresponding label as NPZ file for models.
+1. Download raw PSG file and hypnogram file from PhysioNet.
+2. Extract different channel signals from downloaded PSG for each patient, and save as a CSV file. Extract corresponding labels from the hypnogram for the same patient.
+3. Load the label CSV and the signal CSV into Spark (PySpark). 
+4. Remove unknown labels, only keep stages W, N1, N2, N3, N4, and REM.
+5. Segment the signals into 30s epochs.
+6. Save the channel signals and corresponding label as NPZ file for models.
 
 ### Deep Learning Pipeline
 1. CNN
